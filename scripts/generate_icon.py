@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate AppIcon.icns for RTInform Container Manager."""
+"""Generate AppIcon.icns for Container Manager."""
 
 import os
 import subprocess
@@ -81,7 +81,7 @@ def draw_icon(size: int) -> Image.Image:
         except (OSError, IOError):
             font = ImageFont.load_default()
 
-    text = "RT"
+    text = "CM"
     bbox = draw.textbbox((0, 0), text, font=font)
     tw = bbox[2] - bbox[0]
     draw.text(
@@ -105,7 +105,7 @@ def draw_icon(size: int) -> Image.Image:
         except (OSError, IOError):
             small_font = ImageFont.load_default()
 
-    sub_text = "inform"
+    sub_text = "compose"
     sub_bbox = draw.textbbox((0, 0), sub_text, font=small_font)
     sub_tw = sub_bbox[2] - sub_bbox[0]
     draw.text(
@@ -120,7 +120,7 @@ def draw_icon(size: int) -> Image.Image:
 
 def main():
     project_root = Path(__file__).parent.parent
-    iconset_dir = project_root / "RTInformApp" / "AppIcon.iconset"
+    iconset_dir = project_root / "ContainerManagerApp" / "AppIcon.iconset"
     iconset_dir.mkdir(parents=True, exist_ok=True)
 
     sizes = [
@@ -139,7 +139,7 @@ def main():
         icon.save(iconset_dir / filename)
         print(f"  Generated {filename} ({px}x{px})")
 
-    icns_path = project_root / "RTInformApp" / "Resources" / "AppIcon.icns"
+    icns_path = project_root / "ContainerManagerApp" / "Resources" / "AppIcon.icns"
     icns_path.parent.mkdir(parents=True, exist_ok=True)
 
     result = subprocess.run(

@@ -1,9 +1,9 @@
 import SwiftUI
 
 @main
-struct RTInformApp: App {
+struct ContainerManagerApp: App {
     var body: some Scene {
-        WindowGroup("RTInform Container Manager") {
+        WindowGroup("Container Manager") {
             ContentView()
                 .preferredColorScheme(.dark)
         }

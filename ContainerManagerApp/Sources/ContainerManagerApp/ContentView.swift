@@ -50,8 +50,8 @@ struct ContentView: View {
 
     private var headerBar: some View {
         HStack {
-            Text("RTInform").foregroundStyle(Theme.accent).fontWeight(.bold)
-            + Text(" Container Manager")
+            Text("Container").foregroundStyle(Theme.accent).fontWeight(.bold)
+            + Text(" Manager")
             Spacer()
             statusBadge
         }

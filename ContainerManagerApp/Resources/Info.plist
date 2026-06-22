@@ -5,19 +5,19 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>ru</string>
     <key>CFBundleExecutable</key>
-    <string>RTInformApp</string>
+    <string>ContainerManagerApp</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIconName</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.rtinform.container-manager</string>
+    <string>com.container-manager.app</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>RTInform Container Manager</string>
+    <string>Container Manager</string>
     <key>CFBundleDisplayName</key>
-    <string>RTInform Container Manager</string>
+    <string>Container Manager</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -29,7 +29,7 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright © 2026 RTInform. MIT License.</string>
+    <string>Copyright 2026. All rights reserved.</string>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>

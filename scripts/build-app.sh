@@ -3,19 +3,19 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-SWIFT_DIR="$PROJECT_DIR/RTInformApp"
+SWIFT_DIR="$PROJECT_DIR/ContainerManagerApp"
 BUILD_DIR="$PROJECT_DIR/build"
-APP_NAME="RTInform Container Manager"
+APP_NAME="Container Manager"
 APP_BUNDLE="$BUILD_DIR/${APP_NAME}.app"
 
-echo "=== RTInform Container Manager — Build ==="
+echo "=== Container Manager — Build ==="
 echo ""
 
 # 1. Build Swift binary
 echo "[1/4] Building Swift binary (release)..."
 cd "$SWIFT_DIR"
 swift build -c release 2>&1 | grep -E '(Build complete|error:|Linking)'
-BINARY="$SWIFT_DIR/.build/release/RTInformApp"
+BINARY="$SWIFT_DIR/.build/release/ContainerManagerApp"
 
 if [ ! -f "$BINARY" ]; then
     echo "ERROR: Binary not found at $BINARY"
@@ -43,7 +43,7 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
-cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/RTInformApp"
+cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/ContainerManagerApp"
 cp "$SWIFT_DIR/Resources/Info.plist" "$APP_BUNDLE/Contents/"
 cp "$ICNS" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 echo "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
@@ -52,7 +52,7 @@ echo "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 echo "[4/4] Build complete!"
 echo ""
 echo "  App bundle: $APP_BUNDLE"
-echo "  Binary:     $APP_BUNDLE/Contents/MacOS/RTInformApp"
+echo "  Binary:     $APP_BUNDLE/Contents/MacOS/ContainerManagerApp"
 echo ""
 echo "Run:  open \"$APP_BUNDLE\""
-echo "  or: $APP_BUNDLE/Contents/MacOS/RTInformApp"
+echo "  or: $APP_BUNDLE/Contents/MacOS/ContainerManagerApp"
