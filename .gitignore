@@ -6,3 +6,12 @@ uploads/
 exports/
 *.egg-info/
 .DS_Store
+
+# Swift
+.build/
+.swiftpm/
+Package.resolved
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
