@@ -33,6 +33,7 @@
         <button id="btn-env" class="btn" disabled>Generate .env</button>
         <button id="btn-resources" class="btn" disabled>Resources</button>
         <button id="btn-graph" class="btn" disabled>Dep Graph</button>
+        <button id="btn-editor" class="btn" disabled>Edit YAML</button>
     </div>
 
     <div class="panels">
@@ -83,10 +84,29 @@
             <div class="panel-header">Dependency Graph</div>
             <div id="graph-body" class="panel-body"></div>
         </div>
+
+        <div id="editor-panel" class="panel full-width hidden">
+            <div class="panel-header">
+                Compose Editor
+                <div class="panel-header-actions">
+                    <button id="btn-save-compose" class="btn btn-sm">Save & Re-parse</button>
+                    <a id="btn-download-compose" href="/api/compose/download" class="btn btn-sm" download>Download YAML</a>
+                </div>
+            </div>
+            <div id="editor-body" class="panel-body editor-body">
+                <textarea id="compose-editor" class="compose-editor" spellcheck="false"></textarea>
+            </div>
+        </div>
     </div>
 
     <div id="log-area" class="log-area hidden">
-        <div class="panel-header">Log</div>
+        <div class="panel-header">
+            Log
+            <div class="panel-header-actions">
+                <button id="btn-copy-log" class="btn btn-sm">Copy Log</button>
+                <button id="btn-clear-log" class="btn btn-sm">Clear</button>
+            </div>
+        </div>
         <div id="log-body" class="panel-body"></div>
     </div>
 </div>

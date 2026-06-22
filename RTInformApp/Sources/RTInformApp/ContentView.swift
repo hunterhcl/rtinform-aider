@@ -33,6 +33,7 @@ struct ContentView: View {
                     if state.showValidation { validationPanel }
                     if state.showEnv { envPanel }
                     if state.showResources, let est = state.resourceEstimate { resourcePanel(est) }
+                    if state.showEditor { editorPanel }
                     if !state.logs.isEmpty { logPanel }
                 }
                 .padding(20)
@@ -130,6 +131,7 @@ struct ContentView: View {
             actionButton("Check", icon: "checkmark.shield") { checkConnections() }
             actionButton(".env", icon: "key") { generateEnv() }
             actionButton("Resources", icon: "gauge.medium") { estimateResources() }
+            actionButton("Edit YAML", icon: "pencil.and.list.clipboard") { state.showEditor.toggle() }
         }
         .padding(14)
         .background(Theme.surface)
@@ -169,9 +171,17 @@ struct ContentView: View {
             }
 
             panel("Images", count: compose.images.count) {
-                ForEach(compose.images, id: \.self) { img in
-                    Text(img).font(.caption).fontWeight(.medium).padding(.vertical, 3)
-                    if img != compose.images.last { Divider().background(Theme.border) }
+                let resolved = ComposeParser.resolvedImages(compose)
+                ForEach(resolved, id: \.original) { pair in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(pair.original).font(.caption).fontWeight(.medium)
+                        if pair.resolved != pair.original {
+                            Text("→ \(pair.resolved)")
+                                .font(.caption2).foregroundStyle(Theme.orange)
+                        }
+                    }
+                    .padding(.vertical, 3)
+                    if pair.original != resolved.last?.original { Divider().background(Theme.border) }
                 }
             }
 
@@ -300,6 +310,30 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Editor
+
+    private var editorPanel: some View {
+        panel("Compose Editor") {
+            VStack(spacing: 10) {
+                TextEditor(text: $state.editorContent)
+                    .font(.system(.caption, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 300)
+                    .padding(8)
+                    .background(Color(red: 0.07, green: 0.07, blue: 0.09))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                HStack {
+                    Spacer()
+                    Button("Save & Re-parse") { saveCompose() }
+                        .buttonStyle(.bordered).font(.caption)
+                    Button("Download YAML") { downloadCompose() }
+                        .buttonStyle(.bordered).font(.caption)
+                }
+            }
+        }
+    }
+
     // MARK: - Log
 
     private var logPanel: some View {
@@ -308,6 +342,8 @@ struct ContentView: View {
                 Text("LOG").font(.caption2).fontWeight(.semibold)
                     .tracking(0.5).foregroundStyle(Theme.textDim)
                 Spacer()
+                Button("Copy Log") { copyLog() }
+                    .font(.caption2).buttonStyle(.plain).foregroundStyle(Theme.textDim)
                 Button("Clear") { state.logs.removeAll() }
                     .font(.caption2).buttonStyle(.plain).foregroundStyle(Theme.textDim)
             }
@@ -405,11 +441,21 @@ struct ContentView: View {
             return
         }
 
+        applyCompose(content)
+    }
+
+    private func applyCompose(_ content: String) {
         do {
             let compose = try ComposeParser.parse(content)
             state.composeFile = compose
+            state.editorContent = content
             state.clearPanels()
             state.log(.ok, "Loaded: \(compose.services.count) services, \(compose.images.count) images")
+
+            let remapped = ComposeParser.resolvedImages(compose).filter { $0.original != $0.resolved }
+            for r in remapped {
+                state.log(.info, "Registry: \(r.original) → \(r.resolved)")
+            }
         } catch {
             state.log(.error, "Parse error: \(error.localizedDescription)")
         }
@@ -419,13 +465,15 @@ struct ContentView: View {
         guard let compose = state.composeFile else { return }
         state.isPulling = true
         let platform = state.architecture.platform
-        state.log(.info, "Pulling \(compose.images.count) images for \(platform)...")
+        let resolved = ComposeParser.resolvedImages(compose)
+        state.log(.info, "Pulling \(resolved.count) images for \(platform)...")
 
         Task {
-            for image in compose.images {
-                let r = await ContainerCLI.pullImage(image, platform: platform)
+            for pair in resolved {
+                let r = await ContainerCLI.pullImage(pair.resolved, platform: platform)
+                let extra = pair.resolved != pair.original ? " (via \(pair.resolved))" : ""
                 await MainActor.run {
-                    state.log(r.ok ? .ok : .error, r.ok ? "Pulled: \(image)" : "Failed: \(image) — \(r.message)")
+                    state.log(r.ok ? .ok : .error, r.ok ? "Pulled: \(pair.original)\(extra)" : "Failed: \(pair.original)\(extra) — \(r.message)")
                 }
             }
             await MainActor.run { state.isPulling = false }
@@ -444,16 +492,17 @@ struct ContentView: View {
 
         state.isExporting = true
         let platform = state.architecture.platform
-        state.log(.info, "Exporting \(compose.images.count) images to \(destURL.path)...")
+        let resolved = ComposeParser.resolvedImages(compose)
+        state.log(.info, "Exporting \(resolved.count) images to \(destURL.path)...")
 
         Task {
-            for image in compose.images {
-                let r = await ContainerCLI.exportImage(image, platform: platform, destDir: destURL)
+            for pair in resolved {
+                let r = await ContainerCLI.exportImage(pair.resolved, platform: platform, destDir: destURL)
                 await MainActor.run {
                     if r.ok {
-                        state.log(.ok, "Exported: \(r.image) → \(r.path) (\(String(format: "%.1f", r.sizeMB)) MB)")
+                        state.log(.ok, "Exported: \(pair.original) → \(r.path) (\(String(format: "%.1f", r.sizeMB)) MB)")
                     } else {
-                        state.log(.error, "Failed: \(r.image) — \(r.message)")
+                        state.log(.error, "Failed: \(pair.original) — \(r.message)")
                     }
                 }
             }
@@ -501,5 +550,37 @@ struct ContentView: View {
         } catch {
             state.log(.error, "Save failed: \(error.localizedDescription)")
         }
+    }
+
+    private func saveCompose() {
+        let content = state.editorContent
+        guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            state.log(.error, "Editor is empty")
+            return
+        }
+        applyCompose(content)
+        state.log(.ok, "Compose saved and re-parsed")
+    }
+
+    private func downloadCompose() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "docker-compose.yaml"
+        panel.allowedContentTypes = [.yaml, .plainText]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try state.editorContent.write(to: url, atomically: true, encoding: .utf8)
+            state.log(.ok, "Saved: \(url.path)")
+        } catch {
+            state.log(.error, "Save failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func copyLog() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        let text = state.logs.map { "[\(formatter.string(from: $0.timestamp))] \($0.message)" }.joined(separator: "\n")
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        state.log(.ok, "Log copied to clipboard")
     }
 }

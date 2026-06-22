@@ -14,6 +14,20 @@ def extract_services(data: dict) -> dict:
     return data.get("services", {})
 
 
+def resolve_image_registry(image: str) -> str:
+    """Resolve image to full registry path.
+    - No '/' → Docker Hub official (unchanged)
+    - One '/' and first part has no '.' → ghcr.io prefix
+    - Already has registry (first part contains '.') → as-is
+    """
+    parts = image.split("/")
+    if len(parts) == 1:
+        return image
+    if len(parts) == 2 and "." not in parts[0]:
+        return f"ghcr.io/{image}"
+    return image
+
+
 def extract_images(data: dict) -> list[str]:
     images = []
     for name, svc in extract_services(data).items():
@@ -21,6 +35,20 @@ def extract_images(data: dict) -> list[str]:
         if img:
             images.append(img)
     return sorted(set(images))
+
+
+def extract_images_resolved(data: dict) -> list[dict]:
+    images = []
+    seen = set()
+    for name, svc in extract_services(data).items():
+        img = svc.get("image")
+        if img and img not in seen:
+            seen.add(img)
+            images.append({
+                "original": img,
+                "resolved": resolve_image_registry(img),
+            })
+    return sorted(images, key=lambda x: x["original"])
 
 
 def extract_env_vars(data: dict) -> dict[str, list[str]]:

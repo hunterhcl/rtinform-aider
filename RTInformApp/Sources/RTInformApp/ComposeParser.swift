@@ -100,6 +100,21 @@ enum ComposeParser {
         return "\(v)"
     }
 
+    // MARK: - Registry resolution
+
+    static func resolveImageRegistry(_ image: String) -> String {
+        let parts = image.split(separator: "/")
+        if parts.count == 1 { return image }
+        if parts.count == 2 && !parts[0].contains(".") {
+            return "ghcr.io/\(image)"
+        }
+        return image
+    }
+
+    static func resolvedImages(_ compose: ComposeFile) -> [(original: String, resolved: String)] {
+        compose.images.map { ($0, resolveImageRegistry($0)) }
+    }
+
     // MARK: - Analysis
 
     static func generateSampleEnv(_ compose: ComposeFile) -> String {

@@ -25,6 +25,8 @@ final class AppState {
     var showValidation = false
     var showEnv = false
     var showResources = false
+    var showEditor = false
+    var editorContent = ""
 
     var isLoaded: Bool { composeFile != nil }
 
@@ -36,8 +38,14 @@ final class AppState {
         showValidation = false
         showEnv = false
         showResources = false
+        showEditor = false
         validationResults = []
         sampleEnv = ""
         resourceEstimate = nil
+    }
+
+    func updateFromCompose() {
+        guard let compose = composeFile else { return }
+        editorContent = compose.raw
     }
 }

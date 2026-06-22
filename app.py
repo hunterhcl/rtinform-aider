@@ -65,10 +65,14 @@ def api_upload():
     ports = parser.extract_ports(data)
     deps = parser.extract_dependencies(data)
 
+    images_resolved = parser.extract_images_resolved(data)
+
     return jsonify({
         "ok": True,
+        "raw": content,
         "services": services,
         "images": images,
+        "images_resolved": images_resolved,
         "networks": networks,
         "volumes": volumes,
         "ports": ports,
@@ -86,7 +90,7 @@ def api_pull():
     body = request.json or {}
     arch = body.get("architecture", "arm64")
     platform = f"linux/{arch}"
-    images = parser.extract_images(current_compose)
+    images = parser.extract_images_resolved(current_compose)
 
     if not images:
         return jsonify({"error": "No images found in compose file"}), 400
@@ -103,7 +107,7 @@ def api_export():
     body = request.json or {}
     arch = body.get("architecture", "arm64")
     platform = f"linux/{arch}"
-    images = parser.extract_images(current_compose)
+    images = parser.extract_images_resolved(current_compose)
 
     if not images:
         return jsonify({"error": "No images found in compose file"}), 400
@@ -139,6 +143,65 @@ def download_sample_env():
     env_path = UPLOAD_DIR / "sample.env"
     env_path.write_text(content)
     return send_file(env_path, as_attachment=True, download_name="sample.env")
+
+
+@app.route("/api/compose/raw", methods=["GET"])
+def api_compose_raw():
+    if not current_compose_raw:
+        return jsonify({"error": "No compose file loaded"}), 400
+    return jsonify({"ok": True, "content": current_compose_raw})
+
+
+@app.route("/api/compose/save", methods=["POST"])
+def api_compose_save():
+    global current_compose, current_compose_raw
+
+    body = request.json or {}
+    content = body.get("content", "")
+    if not content.strip():
+        return jsonify({"error": "Empty content"}), 400
+
+    try:
+        data = parser.parse_compose(content)
+    except Exception as e:
+        return jsonify({"error": f"Parse error: {e}"}), 400
+
+    current_compose = data
+    current_compose_raw = content
+
+    save_path = UPLOAD_DIR / "docker-compose.yaml"
+    save_path.write_text(content)
+
+    services = parser.get_service_summary(data)
+    images = parser.extract_images(data)
+    images_resolved = parser.extract_images_resolved(data)
+    networks = parser.extract_networks(data)
+    volumes = parser.extract_volumes(data)
+    ports = parser.extract_ports(data)
+    deps = parser.extract_dependencies(data)
+
+    return jsonify({
+        "ok": True,
+        "raw": content,
+        "services": services,
+        "images": images,
+        "images_resolved": images_resolved,
+        "networks": networks,
+        "volumes": volumes,
+        "ports": ports,
+        "dependencies": deps,
+        "service_count": len(services),
+        "image_count": len(images),
+    })
+
+
+@app.route("/api/compose/download", methods=["GET"])
+def api_compose_download():
+    if not current_compose_raw:
+        return jsonify({"error": "No compose file loaded"}), 400
+    save_path = UPLOAD_DIR / "docker-compose.yaml"
+    save_path.write_text(current_compose_raw)
+    return send_file(save_path, as_attachment=True, download_name="docker-compose.yaml")
 
 
 @app.route("/api/images", methods=["GET"])

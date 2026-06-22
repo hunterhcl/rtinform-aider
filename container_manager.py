@@ -43,11 +43,17 @@ def pull_image(image: str, platform: str = "linux/arm64") -> dict:
     return run_cmd(args, timeout=600)
 
 
-def pull_all_images(images: list[str], platform: str = "linux/arm64") -> list[dict]:
+def pull_all_images(images: list[dict], platform: str = "linux/arm64") -> list[dict]:
+    """Pull images. Each item: {"original": ..., "resolved": ...}"""
     results = []
-    for img in images:
-        result = pull_image(img, platform)
-        results.append({"image": img, **result})
+    for img_info in images:
+        if isinstance(img_info, str):
+            original = resolved = img_info
+        else:
+            original = img_info["original"]
+            resolved = img_info["resolved"]
+        result = pull_image(resolved, platform)
+        results.append({"image": original, "resolved": resolved, **result})
     return results
 
 
@@ -56,17 +62,23 @@ def save_image(image: str, output_path: str) -> dict:
     return run_cmd(args, timeout=600)
 
 
-def export_all_images(images: list[str], platform: str = "linux/arm64", dest_dir: str | None = None) -> list[dict]:
+def export_all_images(images: list[dict], platform: str = "linux/arm64", dest_dir: str | None = None) -> list[dict]:
+    """Export images. Each item: {"original": ..., "resolved": ...}"""
     dest = Path(dest_dir) if dest_dir else EXPORT_DIR
     dest.mkdir(parents=True, exist_ok=True)
     results = []
-    for img in images:
-        safe_name = re.sub(r"[/:@]", "_", img)
+    for img_info in images:
+        if isinstance(img_info, str):
+            original = resolved = img_info
+        else:
+            original = img_info["original"]
+            resolved = img_info["resolved"]
+        safe_name = re.sub(r"[/:@]", "_", original)
         arch_suffix = platform.replace("/", "_")
         tar_path = dest / f"{safe_name}_{arch_suffix}.tar"
         gz_path = dest / f"{safe_name}_{arch_suffix}.tar.gz"
 
-        result = save_image(img, str(tar_path))
+        result = save_image(resolved, str(tar_path))
         if result["ok"] and tar_path.exists():
             compress = run_cmd(["gzip", "-f", str(tar_path)])
             if compress["ok"] and gz_path.exists():
@@ -76,7 +88,7 @@ def export_all_images(images: list[str], platform: str = "linux/arm64", dest_dir
                 result["file"] = str(tar_path)
                 if tar_path.exists():
                     result["size"] = tar_path.stat().st_size
-        results.append({"image": img, **result})
+        results.append({"image": original, "resolved": resolved, **result})
     return results
 
 

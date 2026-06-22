@@ -6,6 +6,8 @@ let state = {
     arch: "arm64",
     pulling: false,
     exporting: false,
+    rawYaml: "",
+    imagesResolved: [],
 };
 
 document.addEventListener("DOMContentLoaded", init);
@@ -73,6 +75,10 @@ function setupControls() {
     $("#btn-env").addEventListener("click", generateEnv);
     $("#btn-resources").addEventListener("click", estimateResources);
     $("#btn-graph").addEventListener("click", showDependencyGraph);
+    $("#btn-editor").addEventListener("click", openEditor);
+    $("#btn-save-compose").addEventListener("click", saveCompose);
+    $("#btn-copy-log").addEventListener("click", copyLog);
+    $("#btn-clear-log").addEventListener("click", clearLog);
 }
 
 async function uploadFile(file) {
@@ -90,16 +96,38 @@ async function uploadFile(file) {
             return;
         }
 
-        state.loaded = true;
-        log("ok", `Loaded: ${data.service_count} services, ${data.image_count} images`);
-
-        renderServices(data.services);
-        renderImages(data.images);
-        renderPorts(data.ports);
-        renderDependencies(data.dependencies);
-        enableControls();
+        handleParseResult(data);
     } catch (e) {
         log("error", `Upload failed: ${e.message}`);
+    }
+}
+
+function handleParseResult(data) {
+    state.loaded = true;
+    state.rawYaml = data.raw || "";
+    state.imagesResolved = data.images_resolved || [];
+
+    log("ok", `Loaded: ${data.service_count} services, ${data.image_count} images`);
+
+    if (state.imagesResolved.length > 0) {
+        const remapped = state.imagesResolved.filter((i) => i.original !== i.resolved);
+        if (remapped.length > 0) {
+            for (const r of remapped) {
+                log("info", `Registry: ${r.original} → ${r.resolved}`);
+            }
+        }
+    }
+
+    renderServices(data.services);
+    renderImages(data.images, state.imagesResolved);
+    renderPorts(data.ports);
+    renderDependencies(data.dependencies);
+    enableControls();
+
+    // Update editor if open
+    const editor = $("#compose-editor");
+    if (editor && state.rawYaml) {
+        editor.value = state.rawYaml;
     }
 }
 
@@ -124,16 +152,31 @@ function renderServices(services) {
     $("#services-panel").classList.remove("hidden");
 }
 
-function renderImages(images) {
+function renderImages(images, imagesResolved) {
     const body = $("#images-body");
     const count = $("#images-count");
     count.textContent = images.length;
 
-    body.innerHTML = images.map((img) => `
-        <div class="service-item">
-            <div class="service-name">${esc(img)}</div>
-        </div>
-    `).join("");
+    const resolvedMap = {};
+    if (imagesResolved) {
+        for (const r of imagesResolved) {
+            resolvedMap[r.original] = r.resolved;
+        }
+    }
+
+    body.innerHTML = images.map((img) => {
+        const resolved = resolvedMap[img];
+        const isRemapped = resolved && resolved !== img;
+        return `
+            <div class="service-item">
+                <div>
+                    <div class="service-name">${esc(img)}</div>
+                    ${isRemapped ? `<div class="service-image">→ ${esc(resolved)}</div>` : ""}
+                </div>
+                ${isRemapped ? `<span class="tag" style="border-color:var(--orange);color:var(--orange)">ghcr.io</span>` : ""}
+            </div>
+        `;
+    }).join("");
 
     $("#images-panel").classList.remove("hidden");
 }
@@ -180,6 +223,8 @@ function enableControls() {
     $$("#controls .btn").forEach((btn) => (btn.disabled = false));
 }
 
+// --- Pull ---
+
 async function pullImages() {
     if (state.pulling) return;
     state.pulling = true;
@@ -201,10 +246,11 @@ async function pullImages() {
             log("error", data.error);
         } else {
             for (const r of data.results) {
+                const extra = r.resolved && r.resolved !== r.image ? ` (via ${r.resolved})` : "";
                 if (r.ok) {
-                    log("ok", `Pulled: ${r.image}`);
+                    log("ok", `Pulled: ${r.image}${extra}`);
                 } else {
-                    log("error", `Failed: ${r.image} — ${r.stderr}`);
+                    log("error", `Failed: ${r.image}${extra} — ${r.stderr}`);
                 }
             }
         }
@@ -216,6 +262,8 @@ async function pullImages() {
     btn.disabled = false;
     state.pulling = false;
 }
+
+// --- Export ---
 
 async function exportImages() {
     if (state.exporting) return;
@@ -255,6 +303,8 @@ async function exportImages() {
     state.exporting = false;
 }
 
+// --- Check ---
+
 async function checkConnections() {
     log("info", "Checking connections...");
 
@@ -291,6 +341,8 @@ async function checkConnections() {
     }
 }
 
+// --- Env ---
+
 async function generateEnv() {
     log("info", "Generating sample.env...");
 
@@ -316,6 +368,8 @@ async function generateEnv() {
         log("error", `Generate failed: ${e.message}`);
     }
 }
+
+// --- Resources ---
 
 async function estimateResources() {
     log("info", "Estimating resources...");
@@ -359,6 +413,8 @@ async function estimateResources() {
         log("error", `Estimate failed: ${e.message}`);
     }
 }
+
+// --- Dependency graph ---
 
 async function showDependencyGraph() {
     log("info", "Building dependency graph...");
@@ -425,6 +481,55 @@ async function showDependencyGraph() {
     }
 }
 
+// --- Compose editor ---
+
+function openEditor() {
+    const panel = $("#editor-panel");
+    const editor = $("#compose-editor");
+
+    if (!panel.classList.contains("hidden")) {
+        panel.classList.add("hidden");
+        return;
+    }
+
+    editor.value = state.rawYaml;
+    panel.classList.remove("hidden");
+    editor.focus();
+}
+
+async function saveCompose() {
+    const editor = $("#compose-editor");
+    const content = editor.value;
+
+    if (!content.trim()) {
+        log("error", "Editor is empty");
+        return;
+    }
+
+    log("info", "Saving and re-parsing compose...");
+
+    try {
+        const res = await fetch("/api/compose/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content }),
+        });
+        const data = await res.json();
+
+        if (data.error) {
+            log("error", `Save error: ${data.error}`);
+            return;
+        }
+
+        handleParseResult(data);
+        log("ok", "Compose saved and re-parsed");
+    } catch (e) {
+        log("error", `Save failed: ${e.message}`);
+    }
+}
+
+// --- Log ---
+
 function log(type, message) {
     const logBody = $("#log-body");
     const line = document.createElement("div");
@@ -434,6 +539,28 @@ function log(type, message) {
     logBody.appendChild(line);
     logBody.scrollTop = logBody.scrollHeight;
     $("#log-area").classList.remove("hidden");
+}
+
+function copyLog() {
+    const logBody = $("#log-body");
+    const text = Array.from(logBody.children)
+        .map((el) => el.textContent)
+        .join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+        log("ok", "Log copied to clipboard");
+    }).catch(() => {
+        // Fallback: select text manually
+        const range = document.createRange();
+        range.selectNodeContents(logBody);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        log("info", "Log selected — use Cmd+C to copy");
+    });
+}
+
+function clearLog() {
+    $("#log-body").innerHTML = "";
 }
 
 function esc(str) {
