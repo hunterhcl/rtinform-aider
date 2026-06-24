@@ -19,3 +19,8 @@ DerivedData/
 # Build output
 build/
 *.iconset/
+
+# Graphify knowledge graphs (generated, not committed)
+graphify-out/
+*.tv
+*.tvim
